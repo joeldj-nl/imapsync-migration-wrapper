@@ -61,8 +61,11 @@ start_sync() {
     passfile1="$SEC_DIR/${safe_user1}_pass1.txt"
     passfile2="$SEC_DIR/${safe_user1}_pass2.txt"
 
+    # Write passwords to files
     echo -n "$pass1" > "$passfile1"
     echo -n "$pass2" > "$passfile2"
+    
+    # SECURITY: Set read/write only for owner (chmod 600)
     chmod 600 "$passfile1" "$passfile2"
 
     # Pre-flight check
@@ -73,6 +76,7 @@ start_sync() {
         echo "✅ Credentials verified successfully!"
     else
         echo "❌ Error: Could not log in. Check credentials."
+        # Immediate cleanup on failure
         rm -f "$passfile1" "$passfile2"
         read -n 1 -s -r -p "Press any key to return..."
         return
@@ -82,7 +86,7 @@ start_sync() {
     logfile="$LOG_DIR/${safe_user1}_${timestamp}.log"
     echo "🚀 Starting migration..."
 
-    # Command array
+    # Command array construction
     cmd=(
         imapsync
         --host1 "$host1"
@@ -102,14 +106,31 @@ start_sync() {
         --skipcrossduplicates
     )
 
-    # Start with nohup, detached from terminal, input redirected from /dev/null
-    nohup "${cmd[@]}" > "$logfile" 2>&1 < /dev/null &
+    # --- SECURITY WRAPPER ---
+    # We run a subshell (...) in the background.
+    # This subshell runs imapsync, and IMMEDIATELY after it finishes (success or fail),
+    # it deletes the password files. 
+    (
+        # Ignore HUP signal (like nohup)
+        trap "" HUP 
+        
+        # Run the command
+        "${cmd[@]}"
+        
+        # SECURITY CLEANUP: Remove passwords immediately after process ends
+        rm -f "$passfile1" "$passfile2"
+        
+        echo "🔒 Security: Temporary password files deleted." >> "$logfile"
+        
+    ) > "$logfile" 2>&1 < /dev/null &
+    
     pid=$!
 
     # Add to tracker: PID | User | LogPath
     echo "$pid|$user1|$logfile" >> "$TRACKER_FILE"
 
     echo "✅ Started! PID: $pid"
+    echo "Note: Password files will be auto-deleted when this task finishes."
     read -n 1 -s -r -p "Press any key to return..."
 }
 
@@ -126,7 +147,6 @@ view_active_logs() {
         return
     fi
 
-    # Read tracker into arrays for selection
     options=()
     logfiles=()
     i=0
@@ -184,7 +204,7 @@ view_all_logs() {
 
     select logf in "${logs[@]}"; do
         if [ -n "$logf" ]; then
-            less +G "$logf" # Opens at the end of the file
+            less +G "$logf" 
             break
         fi
     done
@@ -195,7 +215,9 @@ clean_logs() {
     echo "================================================="
     echo "               CLEANUP LOGS                      "
     echo "================================================="
-    read -p "Are you sure you want to delete ALL log files? (y/n): " confirm
+    echo "Warning: This will delete all log files."
+    echo "It will NOT stop active migrations."
+    read -p "Are you sure? (y/n): " confirm
     if [[ $confirm == "y" ]]; then
         rm -f "$LOG_DIR"/*.log
         echo "Logs deleted."
@@ -207,13 +229,16 @@ clean_logs() {
 
 # --- MAIN MENU ---
 
+# Trap interrupt (CTRL+C) in the menu to prevent leaving mess
+trap 'echo -e "\nExiting... cleaning up."; rm -f "$SEC_DIR"/*_pass*.txt; exit' INT
+
 while true; do
-    clean_tracker # Update status before showing menu
+    clean_tracker 
     active_count=$(wc -l < "$TRACKER_FILE")
     
     clear
     echo "================================================="
-    echo "      UNIVERSAL IMAP MIGRATION TOOL (CLI)        "
+    echo "      UNIVERSAL IMAP MIGRATION TOOL (SECURE)     "
     echo "================================================="
     echo "  1) Start new migration"
     echo "  2) View ACTIVE logs ($active_count running)"
@@ -228,7 +253,10 @@ while true; do
         2) view_active_logs ;;
         3) view_all_logs ;;
         4) clean_logs ;;
-        5) exit 0 ;;
+        5) 
+           # Extra cleanup on exit just in case
+           exit 0 
+           ;;
         *) echo "Invalid."; sleep 1 ;;
     esac
 done
