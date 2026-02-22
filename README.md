@@ -2,7 +2,7 @@
 
 A robust, interactive Bash wrapper for **imapsync**. This tool provides a user-friendly CLI menu to migrate email accounts between servers.
 
-It handles background processing, logging, and connection stability automatically, so you don't have to memorize complex CLI flags.
+It handles background processing, logging, connection stability, and security automatically, so you don't have to memorize complex CLI flags.
 
 ## 🚀 Features
 
@@ -11,7 +11,7 @@ It handles background processing, logging, and connection stability automaticall
 *   **Performance Optimized:** Uses `--useheader` and `--skipcrossduplicates` for maximum speed (skips downloading full bodies if headers match).
 *   **Live Monitoring:** View real-time logs of *active* migrations without interrupting them.
 *   **PID Tracking:** Smart tracking system that knows exactly which migrations are running and which have finished.
-*   **Secure:** Passwords are stored in temporary, permission-locked files (`chmod 600`) during execution to prevent command-history leaks.
+*   **Secure & Self-Cleaning:** Passwords are stored in temporary, permission-locked files (`chmod 600`) and are **automatically deleted** the moment the migration finishes or fails.
 
 ## 🛠️ Prerequisites
 
@@ -42,11 +42,10 @@ The tool uses standard Linux commands (`ps`, `grep`, `awk`, `tail`). These are u
 
 ## 📥 Installation
 
-
 Clone this repository or copy and paste the script into `migration_tool.sh`.
 
-Make the script executable.
- ```bash
+Make the script executable:
+```bash
 chmod +x migration_tool.sh
 ```
 
@@ -63,7 +62,7 @@ Run the tool from your terminal:
 1.  **Start new migration:**
     *   Prompts for Source (Host1) and Destination (Host2) details.
     *   Automatically validates credentials (`--justlogin`) before starting.
-    *   Starts the migration in the background.
+    *   Starts the migration in the background and schedules immediate password cleanup.
 2.  **View ACTIVE logs:**
     *   Shows a list of currently running migrations.
     *   Select one to view its live progress.
@@ -87,4 +86,4 @@ This script applies the following `imapsync` optimizations by default:
 
 The script creates two hidden folders in its running directory:
 *   `./imapsync_logs/`: Contains the output logs for every migration.
-*   `./.imapsync_secrets/`: Temporarily stores password files and the active process tracker.
+*   `./.imapsync_secrets/`: Temporarily stores password files and the active process tracker (cleaned up automatically).
